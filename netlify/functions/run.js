@@ -5,8 +5,22 @@ const openai = new OpenAI({
 });
 
 exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
+  }
+
   try {
-    const { message, thread_id } = JSON.parse(event.body);
+    const { message, thread_id } = JSON.parse(event.body || "{}");
+
+    if (!message) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "No message provided" }),
+      };
+    }
 
     // Step 1: Create a new thread if needed
     let threadId = thread_id;
@@ -15,7 +29,7 @@ exports.handler = async (event) => {
       threadId = thread.id;
     }
 
-    // Step 2: Add user message to thread
+    // Step 2: Add the user's message
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
@@ -26,32 +40,45 @@ exports.handler = async (event) => {
       assistant_id: process.env.ASSISTANT_ID,
     });
 
-    // Step 4: Poll until run completes
-    let status = run.status;
-    let result;
+    // Step 4: Poll until the assistant finishes
+    let runStatus = run.status;
+    let attempts = 0;
+    const maxAttempts = 15;
 
-    while (status === "queued" || status === "in_progress") {
+    while (
+      (runStatus === "queued" || runStatus === "in_progress") &&
+      attempts < maxAttempts
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const check = await openai.beta.threads.runs.retrieve(threadId, run.id);
-      status = check.status;
+      const runCheck = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      runStatus = runCheck.status;
+      attempts++;
     }
 
-    // Step 5: Get messages
+    if (runStatus !== "completed") {
+      return {
+        statusCode: 408,
+        body: JSON.stringify({ error: "Assistant timeout or failure" }),
+      };
+    }
+
+    // Step 5: Get the latest assistant message
     const messages = await openai.beta.threads.messages.list(threadId);
-    const lastMessage = messages.data.find((msg) => msg.role === "assistant");
+    const assistantReply = messages.data.find((msg) => msg.role === "assistant");
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        reply: lastMessage?.content?.[0]?.text?.value || "No response.",
+        reply: assistantReply?.content?.[0]?.text?.value || "No reply generated.",
         thread_id: threadId,
       }),
     };
-  } catch (err) {
-    console.error("Error in assistant run:", err);
+  } catch (error) {
+    console.error("OpenAI Assistant Error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to process assistant request." }),
+      body: JSON.stringify({ error: "Internal server error" }),
     };
   }
 };
+
