@@ -22,25 +22,25 @@ exports.handler = async (event) => {
       };
     }
 
-    // Step 1: Create a thread if not provided
+    // Step 1: Create thread if not provided
     let threadId = thread_id;
     if (!threadId) {
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
     }
 
-    // Step 2: Add user message
+    // Step 2: Add message
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
     });
 
-    // Step 3: Run the assistant
+    // Step 3: Run assistant
     const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: process.env.ASSISTANT_ID,
     });
 
-    // Step 4: Poll until completion
+    // Step 4: Poll for result
     let status = run.status;
     let attempts = 0;
     const maxAttempts = 15;
@@ -62,14 +62,18 @@ exports.handler = async (event) => {
     // Step 5: Get assistant message
     const messages = await openai.beta.threads.messages.list(threadId);
     const assistantReply = messages.data.find((msg) => msg.role === "assistant");
+    const reply = assistantReply?.content?.[0]?.text?.value;
 
-    const reply =
-      assistantReply?.content?.[0]?.text?.value ||
-      "⚠️ Assistant responded, but no message was returned. Please check your Assistant’s instructions.";
+    if (!reply) {
+      console.log("⚠️ Assistant gave no content. Full message:", assistantReply);
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply, thread_id: threadId }),
+      body: JSON.stringify({
+        reply: reply || "⚠️ Assistant ran, but didn’t return anything you can see.",
+        thread_id: threadId,
+      }),
     };
   } catch (error) {
     console.error("❌ OpenAI Assistant Error:", error);
@@ -79,5 +83,6 @@ exports.handler = async (event) => {
     };
   }
 };
+
 
 
