@@ -1,6 +1,8 @@
 [build]
-  functions = "netlify/functions"
   publish = "/"
+  functions = "netlify/functions"
 
-# ✅ No redirects needed for Netlify functions
-
+[functions."run"]
+  external_node_modules = ["openai"]
+  included_files = []
+  node_bundler = "esbuild"
