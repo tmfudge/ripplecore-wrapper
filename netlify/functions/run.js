@@ -18,18 +18,18 @@ exports.handler = async (event) => {
     if (!message) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "No message provided" }),
+        body: JSON.stringify({ error: "No message provided." }),
       };
     }
 
-    // Step 1: Create a new thread if needed
+    // Step 1: Create a thread if not provided
     let threadId = thread_id;
     if (!threadId) {
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
     }
 
-    // Step 2: Add the user's message
+    // Step 2: Add user message
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
@@ -40,45 +40,44 @@ exports.handler = async (event) => {
       assistant_id: process.env.ASSISTANT_ID,
     });
 
-    // Step 4: Poll until the assistant finishes
-    let runStatus = run.status;
+    // Step 4: Poll until completion
+    let status = run.status;
     let attempts = 0;
     const maxAttempts = 15;
 
-    while (
-      (runStatus === "queued" || runStatus === "in_progress") &&
-      attempts < maxAttempts
-    ) {
+    while ((status === "queued" || status === "in_progress") && attempts < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const runCheck = await openai.beta.threads.runs.retrieve(threadId, run.id);
-      runStatus = runCheck.status;
+      const updatedRun = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      status = updatedRun.status;
       attempts++;
     }
 
-    if (runStatus !== "completed") {
+    if (status !== "completed") {
       return {
         statusCode: 408,
-        body: JSON.stringify({ error: "Assistant timeout or failure" }),
+        body: JSON.stringify({ reply: "⏳ Assistant timed out. Please try again." }),
       };
     }
 
-    // Step 5: Get the latest assistant message
+    // Step 5: Get assistant message
     const messages = await openai.beta.threads.messages.list(threadId);
     const assistantReply = messages.data.find((msg) => msg.role === "assistant");
 
+    const reply =
+      assistantReply?.content?.[0]?.text?.value ||
+      "⚠️ Assistant responded, but no message was returned. Please check your Assistant’s instructions.";
+
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        reply: assistantReply?.content?.[0]?.text?.value || "No reply generated.",
-        thread_id: threadId,
-      }),
+      body: JSON.stringify({ reply, thread_id: threadId }),
     };
   } catch (error) {
-    console.error("OpenAI Assistant Error:", error);
+    console.error("❌ OpenAI Assistant Error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Internal server error" }),
+      body: JSON.stringify({ error: "Failed to connect to assistant." }),
     };
   }
 };
+
 
