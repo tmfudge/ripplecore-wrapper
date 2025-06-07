@@ -1,7 +1,7 @@
 const { OpenAI } = require("openai");
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY, // ✅ This still comes from Netlify env
 });
 
 exports.handler = async (event) => {
@@ -29,15 +29,15 @@ exports.handler = async (event) => {
       threadId = thread.id;
     }
 
-    // Step 2: Add message
+    // Step 2: Add message to thread
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
     });
 
-    // Step 3: Run assistant
+    // Step 3: Run assistant (hardcoded ID to bypass env var issue)
     const run = await openai.beta.threads.runs.create(threadId, {
-      assistant_id: process.env.ASSISTANT_ID,
+      assistant_id: "asst_36tNu70K30oDEVnGF0HauNJq",
     });
 
     // Step 4: Poll for result
@@ -62,18 +62,14 @@ exports.handler = async (event) => {
     // Step 5: Get assistant message
     const messages = await openai.beta.threads.messages.list(threadId);
     const assistantReply = messages.data.find((msg) => msg.role === "assistant");
-    const reply = assistantReply?.content?.[0]?.text?.value;
 
-    if (!reply) {
-      console.log("⚠️ Assistant gave no content. Full message:", assistantReply);
-    }
+    const reply =
+      assistantReply?.content?.[0]?.text?.value ||
+      "⚠️ Assistant ran, but didn’t return anything you can see.";
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        reply: reply || "⚠️ Assistant ran, but didn’t return anything you can see.",
-        thread_id: threadId,
-      }),
+      body: JSON.stringify({ reply, thread_id: threadId }),
     };
   } catch (error) {
     console.error("❌ OpenAI Assistant Error:", error);
@@ -83,6 +79,7 @@ exports.handler = async (event) => {
     };
   }
 };
+
 
 
 
