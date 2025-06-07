@@ -3,25 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RippleCore™ Chat</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>RippleCore Assistant</title>
+  <style>
+    body { font-family: sans-serif; padding: 40px; max-width: 600px; margin: auto; }
+    input, button, textarea { width: 100%; padding: 10px; margin-top: 10px; }
+    .response { margin-top: 20px; white-space: pre-line; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1 style="color: #7d4aea; font-size: 2rem; margin-bottom: 0.25em;">RippleCore™ Assistant</h1>
-    <p style="font-size: 1.1rem; color: #444; margin-top: 0; margin-bottom: 1.5em;">
-      Ask anything about your voice, content, or strategy. RippleCore is listening.
-    </p>
+  <h1>RippleCore Assistant</h1>
+  <p>Ask a question or say hello to RippleCore:</p>
+  
+  <textarea id="userMessage" rows="4" placeholder="Type your message..."></textarea>
+  <button onclick="sendMessage()">Send</button>
+  
+  <div class="response" id="assistantResponse"></div>
 
-    <div id="chat-box" class="chat-box">
-      <div><strong>RippleCore:</strong> 👋 Welcome. What would you like to work on first—voice, audience, or clarity?</div>
-    </div>
+  <script>
+    async function sendMessage() {
+      const message = document.getElementById("userMessage").value;
+      const responseDiv = document.getElementById("assistantResponse");
 
-    <form id="chat-form">
-      <input type="text" id="user-input" placeholder="Type your message..." autocomplete="off" />
-      <button type="submit">Send</button>
-    </form>
-  </div>
-  <script src="script.js"></script>
+      responseDiv.innerText = "⌛ Thinking...";
+      
+      try {
+        const res = await fetch("/.netlify/functions/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+
+        const data = await res.json();
+        responseDiv.innerText = data.reply || "⚠️ No response.";
+      } catch (err) {
+        console.error(err);
+        responseDiv.innerText = "❌ Error talking to assistant.";
+      }
+    }
+  </script>
 </body>
 </html>
+
