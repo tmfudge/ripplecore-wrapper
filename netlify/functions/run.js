@@ -1,7 +1,7 @@
 const { OpenAI } = require("openai");
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // This stays in Netlify env vars
+  apiKey: process.env.OPENAI_API_KEY, // ✅ Environment variable in Netlify
 });
 
 exports.handler = async (event) => {
@@ -22,33 +22,33 @@ exports.handler = async (event) => {
       };
     }
 
-    // Step 1: Create thread if needed
+    // Step 1: Create a thread if needed
     let threadId = thread_id;
     if (!threadId) {
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
     }
 
-    // Step 2: Add user message to thread
+    // Step 2: Add message to thread
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
     });
 
-    // Step 3: Run the assistant (hardcoded ID is safe)
+    // Step 3: Run the assistant (✅ Hardcoded safe assistant ID)
     const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: "asst_36tNu70K30oDEVnGF0HauNJq",
     });
 
-    // Step 4: Poll for completion
+    // Step 4: Poll until run is complete
     let status = run.status;
     let attempts = 0;
     const maxAttempts = 15;
 
     while ((status === "queued" || status === "in_progress") && attempts < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const updatedRun = await openai.beta.threads.runs.retrieve(threadId, run.id);
-      status = updatedRun.status;
+      const check = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      status = check.status;
       attempts++;
     }
 
@@ -59,26 +59,25 @@ exports.handler = async (event) => {
       };
     }
 
-    // Step 5: Retrieve assistant reply
+    // Step 5: Get assistant reply
     const messages = await openai.beta.threads.messages.list(threadId);
     const assistantReply = messages.data.find((msg) => msg.role === "assistant");
 
-    const reply =
-      assistantReply?.content?.[0]?.text?.value ||
-      "⚠️ Assistant ran, but didn’t return anything.";
+    const reply = assistantReply?.content?.[0]?.text?.value || "⚠️ No reply received.";
 
     return {
       statusCode: 200,
       body: JSON.stringify({ reply, thread_id: threadId }),
     };
   } catch (error) {
-    console.error("❌ Assistant Error:", error);
+    console.error("❌ Error in assistant call:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Assistant processing failed." }),
+      body: JSON.stringify({ error: "Assistant failed to respond." }),
     };
   }
 };
+
 
 
 
