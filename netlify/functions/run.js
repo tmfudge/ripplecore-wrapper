@@ -1,7 +1,7 @@
 const { OpenAI } = require("openai");
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // ✅ This still comes from Netlify env
+  apiKey: process.env.OPENAI_API_KEY, // This stays in Netlify env vars
 });
 
 exports.handler = async (event) => {
@@ -22,25 +22,25 @@ exports.handler = async (event) => {
       };
     }
 
-    // Step 1: Create thread if not provided
+    // Step 1: Create thread if needed
     let threadId = thread_id;
     if (!threadId) {
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
     }
 
-    // Step 2: Add message to thread
+    // Step 2: Add user message to thread
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
     });
 
-    // Step 3: Run assistant (hardcoded ID to bypass env var issue)
+    // Step 3: Run the assistant (hardcoded ID is safe)
     const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: "asst_36tNu70K30oDEVnGF0HauNJq",
     });
 
-    // Step 4: Poll for result
+    // Step 4: Poll for completion
     let status = run.status;
     let attempts = 0;
     const maxAttempts = 15;
@@ -59,26 +59,27 @@ exports.handler = async (event) => {
       };
     }
 
-    // Step 5: Get assistant message
+    // Step 5: Retrieve assistant reply
     const messages = await openai.beta.threads.messages.list(threadId);
     const assistantReply = messages.data.find((msg) => msg.role === "assistant");
 
     const reply =
       assistantReply?.content?.[0]?.text?.value ||
-      "⚠️ Assistant ran, but didn’t return anything you can see.";
+      "⚠️ Assistant ran, but didn’t return anything.";
 
     return {
       statusCode: 200,
       body: JSON.stringify({ reply, thread_id: threadId }),
     };
   } catch (error) {
-    console.error("❌ OpenAI Assistant Error:", error);
+    console.error("❌ Assistant Error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to connect to assistant." }),
+      body: JSON.stringify({ error: "Assistant processing failed." }),
     };
   }
 };
+
 
 
 
